@@ -142,8 +142,13 @@ class _PdfToolsScreenState extends State<PdfToolsScreen> {
     }
     final notificationId = Random().nextInt(100000);
     if (error != null) {
-      rootScaffoldMessengerKey.currentState?.showSnackBar(SnackBar(content: Text('Error: $error')));
-      NotificationService.showNotification(id: notificationId, title: 'Task Failed', body: 'Error: $error');
+      String displayError = error;
+      if (error.contains('PlatformException') || error.length > 100) {
+        displayError = 'Something went wrong while processing the file. Please try again.';
+      }
+      
+      rootScaffoldMessengerKey.currentState?.showSnackBar(SnackBar(content: Text('Error: $displayError')));
+      NotificationService.showNotification(id: notificationId, title: 'Task Failed', body: 'Error: $displayError');
     } else {
       rootScaffoldMessengerKey.currentState?.showSnackBar(SnackBar(content: Text(successMessage)));
       NotificationService.showNotification(
@@ -173,14 +178,20 @@ class _PdfToolsScreenState extends State<PdfToolsScreen> {
   Future<void> _startMergeProcess() async {
     if (_selectedFile == null || _mergeFile2 == null) return;
     
-    setState(() {
-      _isCancelled = false;
-      _isProcessing = true;
-      _progressMessage = AppLocalizations.of(context)!.mergingPdfs;
-    });
-    _startSimulatedProgress();
-    
-    final outputDir = await getApplicationDocumentsDirectory();
+    final completer = Completer<void>();
+    void performMerge() async {
+      if (!mounted) {
+        if (!completer.isCompleted) completer.complete();
+        return;
+      }
+      setState(() {
+        _isCancelled = false;
+        _isProcessing = true;
+        _progressMessage = AppLocalizations.of(context)!.mergingPdfs;
+      });
+      _startSimulatedProgress();
+      
+      final outputDir = await getApplicationDocumentsDirectory();
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final mergedFilePath = '${outputDir.path}/scan_merged_$timestamp.pdf';
     
@@ -207,10 +218,16 @@ class _PdfToolsScreenState extends State<PdfToolsScreen> {
       }
       
       _finishTask(AppLocalizations.of(context)!.mergeSuccess, filePath: mergedFilePath);
-    } catch (e, stack) {
-      FirebaseCrashlytics.instance.recordError(e, stack, fatal: false, reason: 'Merge PDF failed');
-      _finishTask(AppLocalizations.of(context)!.mergeSuccess, error: e.toString());
+      } catch (e, stack) {
+        FirebaseCrashlytics.instance.recordError(e, stack, fatal: false, reason: 'Merge PDF failed');
+        _finishTask(AppLocalizations.of(context)!.mergeSuccess, error: e.toString());
+      } finally {
+        if (!completer.isCompleted) completer.complete();
+      }
     }
+
+    AdService.showMergeInterstitialAd(onAdClosed: performMerge);
+    await completer.future;
   }
 
   Future<CompressionConfig?> _showCompressOptionsDialog(double currentSizeMB) async {
@@ -380,12 +397,18 @@ class _PdfToolsScreenState extends State<PdfToolsScreen> {
       }
     }
 
-    setState(() {
-      _isCancelled = false;
-      _isProcessing = true;
-      _progressMessage = AppLocalizations.of(context)!.compressingPdf;
-    });
-    _startSimulatedProgress();
+    final completer = Completer<void>();
+    void performCompress() async {
+      if (!mounted) {
+        if (!completer.isCompleted) completer.complete();
+        return;
+      }
+      setState(() {
+        _isCancelled = false;
+        _isProcessing = true;
+        _progressMessage = AppLocalizations.of(context)!.compressingPdf;
+      });
+      _startSimulatedProgress();
 
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final outputDir = await getApplicationDocumentsDirectory();
@@ -545,8 +568,14 @@ class _PdfToolsScreenState extends State<PdfToolsScreen> {
         try { await File(bestPath).delete(); } catch (_) {}
       }
       _finishTask(AppLocalizations.of(context)!.compressFailed, error: e.toString());
+    } finally {
+      if (!completer.isCompleted) completer.complete();
     }
   }
+
+  AdService.showCompressInterstitialAd(onAdClosed: performCompress);
+  await completer.future;
+}
 
   /// Renders each page of [inputFile] to an image at [dpi], compresses it 
   /// as JPEG at [jpegQuality], and rebuilds a new PDF from those images.
@@ -613,13 +642,14 @@ class _PdfToolsScreenState extends State<PdfToolsScreen> {
       final outputDir = await getApplicationDocumentsDirectory();
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       
-      final folderPath = '${outputDir.path}/temp_images_$timestamp';
-      final dir = await Directory(folderPath).create(recursive: true);
+      final folderPath = '${outputDir.path}/scan_exported_images_$timestamp';
+      await Directory(folderPath).create(recursive: true);
       
       int pageIndex = 1;
       await for (final page in Printing.raster(bytes, dpi: 150)) {
         if (_isCancelled) {
           try {
+            final dir = Directory(folderPath);
             if (await dir.exists()) await dir.delete(recursive: true);
           } catch (_) {}
           return;
@@ -629,17 +659,8 @@ class _PdfToolsScreenState extends State<PdfToolsScreen> {
         pageIndex++;
       }
       
-      // Zip the folder
-      final zipFilePath = '${outputDir.path}/scan_exported_images_$timestamp.zip';
-      var encoder = ZipFileEncoder();
-      encoder.create(zipFilePath);
-      encoder.addDirectory(dir);
-      encoder.close();
-      
-      // Cleanup folder
-      await dir.delete(recursive: true);
-      
-      _finishTask('Exported $pageIndex images to ZIP', filePath: zipFilePath);
+      final imageCount = pageIndex - 1;
+      _finishTask('Exported $imageCount images to folder', filePath: folderPath);
     } catch (e, stack) {
       FirebaseCrashlytics.instance.recordError(e, stack, fatal: false, reason: 'Export to Images failed');
       _finishTask('Export Failed', error: e.toString());
@@ -736,12 +757,18 @@ class _PdfToolsScreenState extends State<PdfToolsScreen> {
 
     if (watermarkText == null || watermarkText.trim().isEmpty) return;
 
-    setState(() {
-      _isCancelled = false;
-      _isProcessing = true;
-      _progressMessage = 'Adding Watermark...';
-    });
-    _startSimulatedProgress();
+    final completer = Completer<void>();
+    void performWatermark() async {
+      if (!mounted) {
+        if (!completer.isCompleted) completer.complete();
+        return;
+      }
+      setState(() {
+        _isCancelled = false;
+        _isProcessing = true;
+        _progressMessage = 'Adding Watermark...';
+      });
+      _startSimulatedProgress();
 
     sf.PdfDocument? document;
 
@@ -796,7 +823,12 @@ class _PdfToolsScreenState extends State<PdfToolsScreen> {
       _finishTask('Failed to add watermark', error: e.toString());
     } finally {
       document?.dispose();
+      if (!completer.isCompleted) completer.complete();
     }
+    }
+
+    AdService.showWatermarkInterstitialAd(onAdClosed: performWatermark);
+    await completer.future;
   }
 
   Future<void> _protectPdf() async {
@@ -854,24 +886,22 @@ class _PdfToolsScreenState extends State<PdfToolsScreen> {
       final protectedFilePath = '${outputDir.path}/scan_protected_$timestamp.pdf';
       
       try {
-        final resultPath = await PdfManipulator().pdfEncryption(
-          params: PDFEncryptionParams(
-            pdfPath: fileToProcess.path,
-            ownerPassword: password,
-            userPassword: password,
-            encryptionAES256: true,
-            encryptionAES128: false,
-            standardEncryptionAES128: false,
-            standardEncryptionAES40: false,
-          ),
-        );
+        final bytes = await fileToProcess.readAsBytes();
+        final document = sf.PdfDocument(inputBytes: bytes);
         
-        if (resultPath != null) {
-          final resultFile = File(resultPath);
-          if (await resultFile.exists()) {
-            await resultFile.copy(protectedFilePath);
-          }
-        } else {
+        final security = document.security;
+        security.userPassword = password;
+        security.ownerPassword = password;
+        security.algorithm = sf.PdfEncryptionAlgorithm.aesx256Bit;
+        
+        final outputBytes = await document.save();
+        document.dispose();
+        
+        final resultFile = File(protectedFilePath);
+        await resultFile.writeAsBytes(outputBytes);
+        
+        // Ensure result file exists
+        if (!(await resultFile.exists())) {
           throw Exception("Failed to encrypt PDF");
         }
         

@@ -38,6 +38,11 @@ class AppConfig {
   static bool get adsHomeScreenEnabled => _rc.getBool('ads_home_screen_enabled');
   static bool get adsHomeNativeEnabled => _rc.getBool('ads_home_native_enabled');
   static bool get adsProtectInterstitialEnabled => _rc.getBool('ads_protect_interstitial_enabled');
+  static bool get adsSplitInterstitialEnabled => _rc.getBool('ads_split_interstitial_enabled');
+  static bool get adsMergeInterstitialEnabled => _rc.getBool('ads_merge_interstitial_enabled');
+  static bool get adsCompressInterstitialEnabled => _rc.getBool('ads_compress_interstitial_enabled');
+  static bool get adsWatermarkInterstitialEnabled => _rc.getBool('ads_watermark_interstitial_enabled');
+  static bool get adsFoldersNativeEnabled => _rc.getBool('ads_folders_native_enabled');
   static bool get analyticsEnabled => _rc.getBool('analytics_enabled');
   static bool get ocrFeatureEnabled => _rc.getBool('ocr_feature_enabled');
   static bool get qrFeatureEnabled => _rc.getBool('qr_feature_enabled');
@@ -59,6 +64,21 @@ class AppConfig {
   // ── AdMob IDs ──
   static String get admobProtectInterstitialAndroid => _rc.getString('admob_protect_interstitial_android');
   static String get admobProtectInterstitialIos => _rc.getString('admob_protect_interstitial_ios');
+  
+  static String get admobSplitInterstitialAndroid => _rc.getString('admob_split_interstitial_android');
+  static String get admobSplitInterstitialIos => _rc.getString('admob_split_interstitial_ios');
+  
+  static String get admobMergeInterstitialAndroid => _rc.getString('admob_merge_interstitial_android');
+  static String get admobMergeInterstitialIos => _rc.getString('admob_merge_interstitial_ios');
+  
+  static String get admobCompressInterstitialAndroid => _rc.getString('admob_compress_interstitial_android');
+  static String get admobCompressInterstitialIos => _rc.getString('admob_compress_interstitial_ios');
+  
+  static String get admobWatermarkInterstitialAndroid => _rc.getString('admob_watermark_interstitial_android');
+  static String get admobWatermarkInterstitialIos => _rc.getString('admob_watermark_interstitial_ios');
+  
+  static String get admobFoldersNativeAndroid => _rc.getString('admob_folders_native_android');
+  static String get admobFoldersNativeIos => _rc.getString('admob_folders_native_ios');
   static String get admobNativeAndroid => _rc.getString('admob_native_android');
   static String get admobNativeIos => _rc.getString('admob_native_ios');
 
@@ -112,6 +132,11 @@ class AppConfig {
         'ads_home_screen_enabled': true,
         'ads_home_native_enabled': true,
         'ads_protect_interstitial_enabled': true,
+        'ads_split_interstitial_enabled': true,
+        'ads_merge_interstitial_enabled': true,
+        'ads_compress_interstitial_enabled': true,
+        'ads_watermark_interstitial_enabled': true,
+        'ads_folders_native_enabled': true,
         'analytics_enabled': true,
         'ocr_feature_enabled': true,
         'qr_feature_enabled': true,
@@ -133,6 +158,21 @@ class AppConfig {
         // AdMob IDs (Test IDs)
         'admob_protect_interstitial_android': 'ca-app-pub-7632721706853296/7783729001',
         'admob_protect_interstitial_ios': 'ca-app-pub-7632721706853296/7783729001',
+        
+        'admob_split_interstitial_android': 'ca-app-pub-7632721706853296/9272204918',
+        'admob_split_interstitial_ios': 'ca-app-pub-7632721706853296/9272204918',
+        
+        'admob_merge_interstitial_android': 'ca-app-pub-7632721706853296/1393714891',
+        'admob_merge_interstitial_ios': 'ca-app-pub-7632721706853296/1393714891',
+        
+        'admob_compress_interstitial_android': 'ca-app-pub-7632721706853296/8069794720',
+        'admob_compress_interstitial_ios': 'ca-app-pub-7632721706853296/8069794720',
+        
+        'admob_watermark_interstitial_android': 'ca-app-pub-7632721706853296/7131369145',
+        'admob_watermark_interstitial_ios': 'ca-app-pub-7632721706853296/7131369145',
+        
+        'admob_folders_native_android': 'ca-app-pub-7632721706853296/8282556875',
+        'admob_folders_native_ios': 'ca-app-pub-7632721706853296/8282556875',
         'admob_native_android': 'ca-app-pub-7632721706853296/3203309990',
         'admob_native_ios': 'ca-app-pub-7632721706853296/3203309990',
 
@@ -149,7 +189,7 @@ class AppConfig {
         'force_update_required': false,
 
         // Privacy & Legal
-        'privacy_policy_url': 'https://docs.google.com/document/d/1GhSOcrpymsv1XZvCXgzW1YQWlrrCpNiBy2dc2eBW8hU/edit?usp=sharing',
+        'privacy_policy_url': 'https://www.downloadkart.com/apps/scan-master-document-scanner/privacy',
         'terms_of_service_url': '',
         'privacy_policy_text':
             'Scan Master automatically sends anonymous crash and error reports '
@@ -169,10 +209,15 @@ class AppConfig {
         'announcement_action_url': '',
       });
 
-      await _rc.fetchAndActivate();
-      debugPrint('AppConfig: Remote Config loaded successfully.');
+      // Fire and forget: Do not block app startup waiting for network!
+      // This allows the app to use defaults/cached values instantly, while updating in background.
+      _rc.fetchAndActivate().then((_) {
+        debugPrint('AppConfig: Remote Config loaded successfully.');
+      }).catchError((e) {
+        debugPrint('AppConfig: Remote Config fetch failed, using defaults. Error: $e');
+      });
     } catch (e) {
-      debugPrint('AppConfig: Remote Config fetch failed, using defaults. Error: $e');
+      debugPrint('AppConfig: Error setting up remote config: $e');
     }
   }
 }

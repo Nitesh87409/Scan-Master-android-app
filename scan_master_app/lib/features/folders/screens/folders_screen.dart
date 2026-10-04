@@ -7,10 +7,14 @@ import 'package:scan_master_app/features/folders/screens/folder_view_screen.dart
 import 'package:share_plus/share_plus.dart';
 import 'package:archive/archive_io.dart';
 import 'package:scan_master_app/features/viewer/screens/viewer_screen.dart';
+import 'package:scan_master_app/features/viewer/screens/text_viewer_screen.dart';
 import 'package:scan_master_app/widgets/file_thumbnail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:scan_master_app/utils/file_options_helper.dart';
 import 'package:scan_master_app/utils/file_filter_util.dart';
+import 'package:scan_master_app/widgets/banner_ad_card.dart';
+import 'package:scan_master_app/core/app_config.dart';
+import 'package:scan_master_app/widgets/banner_ad_card.dart';
 import 'package:scan_master_app/widgets/file_filter_bar.dart';
 import 'package:scan_master_app/l10n/app_localizations.dart';
 
@@ -176,24 +180,9 @@ class _FoldersScreenState extends State<FoldersScreen> {
       return;
     }
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Zipping $folderName...')),
-      );
-    }
-
     try {
-      final tempDir = await getTemporaryDirectory();
-      final zipFile = File('${tempDir.path}/$folderName.zip');
-      
-      final zipEncoder = ZipFileEncoder();
-      zipEncoder.create(zipFile.path);
-      for (final file in files) {
-        await zipEncoder.addFile(file);
-      }
-      await zipEncoder.close();
-
-      await Share.shareXFiles([XFile(zipFile.path)], text: 'Shared $folderName from Scan Master');
+      final xFiles = files.map((f) => XFile(f.path)).toList();
+      await Share.shareXFiles(xFiles, text: 'Shared $folderName from Scan Master');
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -214,6 +203,11 @@ class _FoldersScreenState extends State<FoldersScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
+                      if (AppConfig.adsEnabled && AppConfig.adsFoldersNativeEnabled)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16.0),
+                          child: BannerAdCardWidget(),
+                        ),
                       Icon(Icons.folder_open, size: 80, color: Colors.grey.shade400),
                       SizedBox(height: 16),
                       Text(
@@ -249,13 +243,26 @@ class _FoldersScreenState extends State<FoldersScreen> {
                         },
                       ),
                       Expanded(
-                        child: ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: _folders.length + filteredFiles.length,
-                          itemBuilder: (context, index) {
-                            if (index < _folders.length) {
-                        final folder = _folders[index];
-                        final folderName = folder.path.split(Platform.pathSeparator).last;
+                        child: Builder(
+                          builder: (context) {
+                            final baseCount = _folders.length + filteredFiles.length;
+                            final showAd = AppConfig.adsEnabled && AppConfig.adsFoldersNativeEnabled;
+                            final adIndex = baseCount > 2 ? 2 : baseCount;
+                            final totalCount = showAd ? baseCount + 1 : baseCount;
+
+                            return ListView.builder(
+                              padding: const EdgeInsets.all(16),
+                              itemCount: totalCount,
+                              itemBuilder: (context, index) {
+                                if (showAd && index == adIndex) {
+                                  return const BannerAdCardWidget();
+                                }
+                                
+                                final dataIndex = (showAd && index > adIndex) ? index - 1 : index;
+
+                                if (dataIndex < _folders.length) {
+                                  final folder = _folders[dataIndex];
+                                  final folderName = folder.path.split(Platform.pathSeparator).last;
                         
                         return Dismissible(
                           key: Key(folder.path),
@@ -391,7 +398,7 @@ class _FoldersScreenState extends State<FoldersScreen> {
                           ),
                         );
                       } else {
-                        final file = filteredFiles[index - _folders.length];
+                        final file = filteredFiles[dataIndex - _folders.length];
                         final fileName = file.path.split(Platform.pathSeparator).last;
                         
                         return Dismissible(
@@ -475,8 +482,10 @@ class _FoldersScreenState extends State<FoldersScreen> {
                         );
                       }
                     },
-                  ),
-                ),
+                  );
+                }
+              ),
+            ),
               ],
             ),
           ),

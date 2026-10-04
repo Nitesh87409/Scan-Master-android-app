@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:pdf_manipulator/pdf_manipulator.dart';
+import 'package:scan_master_app/services/ad_service.dart';
 
 class VisualSplitPdfScreen extends StatefulWidget {
   final File file;
@@ -92,10 +93,12 @@ class _VisualSplitPdfScreenState extends State<VisualSplitPdfScreen> {
       return;
     }
 
-    setState(() {
-      _isSplitting = true;
-      _progressText = "Splitting PDF...";
-    });
+    void performSplit() async {
+      if (!mounted) return;
+      setState(() {
+        _isSplitting = true;
+        _progressText = "Splitting PDF...";
+      });
 
     final List<String> createdPaths = [];
 
@@ -149,7 +152,7 @@ class _VisualSplitPdfScreenState extends State<VisualSplitPdfScreen> {
           final f = File(path);
           if (await f.exists()) await f.delete();
         } catch (_) {}
-      }
+      } // <- MISSING BRACE FIXED
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error splitting: $e')));
         setState(() => _isSplitting = false);
@@ -157,7 +160,10 @@ class _VisualSplitPdfScreenState extends State<VisualSplitPdfScreen> {
     }
   }
 
-  @override
+  AdService.showSplitInterstitialAd(onAdClosed: performSplit);
+}
+
+@override
   Widget build(BuildContext context) {
     final fileName = widget.file.path.split(Platform.pathSeparator).last;
 

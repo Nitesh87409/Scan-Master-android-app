@@ -4,6 +4,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:scan_master_app/main.dart';
 import 'package:scan_master_app/features/viewer/screens/viewer_screen.dart';
+import 'package:scan_master_app/features/viewer/screens/text_viewer_screen.dart';
+import 'package:scan_master_app/features/folders/screens/folder_view_screen.dart';
 
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
@@ -30,6 +32,26 @@ class NotificationService {
               );
             } else {
               // Fallback if context is not ready
+              await OpenFilex.open(path);
+            }
+          } else if (path.toLowerCase().endsWith('.txt')) {
+            final context = navigatorKey.currentContext;
+            if (context != null) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => TextViewerScreen(file: File(path))),
+              );
+            } else {
+              await OpenFilex.open(path);
+            }
+          } else if (FileSystemEntity.isDirectorySync(path)) {
+            final context = navigatorKey.currentContext;
+            if (context != null) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => FolderViewScreen(folder: Directory(path))),
+              );
+            } else {
               await OpenFilex.open(path);
             }
           } else {

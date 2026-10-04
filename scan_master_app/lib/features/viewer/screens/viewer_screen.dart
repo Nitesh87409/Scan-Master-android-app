@@ -30,14 +30,13 @@ class _ViewerScreenState extends State<ViewerScreen> {
 
   bool _isSearching = false;
   late final PdfViewerController _pdfViewerController;
-  late final PdfTextSearcher _textSearcher;
+  PdfTextSearcher? _textSearcher;
   final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _pdfViewerController = PdfViewerController();
-    _textSearcher = PdfTextSearcher(_pdfViewerController)..addListener(_updateState);
     _isPdf = widget.file.path.toLowerCase().endsWith('.pdf');
     _fileName = widget.file.path.split(Platform.pathSeparator).last;
     if (!_isPdf) {
@@ -86,6 +85,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
   }
 
   Future<void> _handleMenuAction(String action) async {
+    final localizations = AppLocalizations.of(context)!;
     final file = File(widget.file.path);
     if (!await file.exists()) {
       if (mounted) {
@@ -111,30 +111,32 @@ class _ViewerScreenState extends State<ViewerScreen> {
             name: _fileName,
           );
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(AppLocalizations.of(context)!.printPdfOnly)),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(localizations.printPdfOnly)),
+            );
+          }
         }
         break;
       case 'download':
         try {
           final bytes = await file.readAsBytes();
           String? savePath = await FilePicker.platform.saveFile(
-            dialogTitle: AppLocalizations.of(context)!.actionSaveToDevice,
+            dialogTitle: localizations.actionSaveToDevice,
             fileName: _fileName,
             bytes: bytes,
           );
           if (savePath != null) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('${AppLocalizations.of(context)!.saveSuccess}$savePath')),
+                SnackBar(content: Text('${localizations.saveSuccess}$savePath')),
               );
             }
           }
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('${AppLocalizations.of(context)!.saveFailed}$e')),
+              SnackBar(content: Text('${localizations.saveFailed}$e')),
             );
           }
         }
@@ -148,8 +150,8 @@ class _ViewerScreenState extends State<ViewerScreen> {
 
   @override
   void dispose() {
-    _textSearcher.removeListener(_updateState);
-    _textSearcher.dispose();
+    _textSearcher?.removeListener(_updateState);
+    _textSearcher?.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -170,10 +172,11 @@ class _ViewerScreenState extends State<ViewerScreen> {
                   hintStyle: TextStyle(color: Colors.white60),
                   border: InputBorder.none,
                 ),
-                onChanged: (val) => _textSearcher.startTextSearch(val),
-                onSubmitted: (val) => _textSearcher.startTextSearch(val),
+                onChanged: (val) => _textSearcher?.startTextSearch(val),
+                onSubmitted: (val) => _textSearcher?.startTextSearch(val),
               )
             : Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(_fileName, style: TextStyle(fontSize: 16, color: Colors.white)),
@@ -200,12 +203,11 @@ class _ViewerScreenState extends State<ViewerScreen> {
                     _isPopping = true;
                   });
                   await Future.delayed(const Duration(milliseconds: 10));
-                  if (mounted) {
-                    if (Navigator.of(context).canPop()) {
-                      Navigator.of(context).pop();
-                    } else {
-                      SystemNavigator.pop();
-                    }
+                  if (!context.mounted) return;
+                  if (Navigator.of(context).canPop()) {
+                    Navigator.of(context).pop();
+                  } else {
+                    SystemNavigator.pop();
                   }
                 }
               },
@@ -221,28 +223,12 @@ class _ViewerScreenState extends State<ViewerScreen> {
                                   controller: _pdfViewerController,
                                   params: PdfViewerParams(
                                     margin: 16.0,
-                                    pageDropShadow: null,
                                     backgroundColor: Colors.black,
-                                    layoutPages: (pages, params) {
-                                      final height = pages.fold(0.0, (prev, page) => prev + page.height.ceilToDouble() + params.margin);
-                                      final width = pages.fold(0.0, (prev, page) => max(prev, page.width.ceilToDouble()));
-                                      final pageLayouts = <Rect>[];
-                                      double y = params.margin / 2;
-                                      for (final page in pages) {
-                                        pageLayouts.add(Rect.fromLTWH(
-                                          ((width - page.width) / 2).floorToDouble(),
-                                          y.floorToDouble(),
-                                          page.width.ceilToDouble(),
-                                          page.height.ceilToDouble(),
-                                        ));
-                                        y += page.height.ceilToDouble() + params.margin;
-                                      }
-                                      return PdfPageLayout(pageLayouts: pageLayouts, documentSize: Size(width, height));
-                                    },
+                                      // Removed custom layoutPages to use pdfrx default layout and prevent layout errors.
                                     errorBannerBuilder: (context, error, stackTrace, documentRef) {
                                       if (error.toString().contains('No password supplied')) {
                                         Future.microtask(() {
-                                          if (mounted) Navigator.of(context).pop();
+                                          if (context.mounted) Navigator.of(context).pop();
                                         });
                                         return SizedBox.shrink();
                                       }
@@ -277,6 +263,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
                                     },
                                     onViewerReady: (document, controller) {
                                       if (!mounted) return;
+                                      _textSearcher = PdfTextSearcher(_pdfViewerController)..addListener(_updateState);
                                       setState(() {
                                         _totalPages = document.pages.length;
                                         _isReady = true;
@@ -320,11 +307,11 @@ class _ViewerScreenState extends State<ViewerScreen> {
       return [
         IconButton(
           icon: Icon(Icons.keyboard_arrow_up, color: Colors.white),
-          onPressed: () => _textSearcher.goToPrevMatch(),
+          onPressed: () => _textSearcher?.goToPrevMatch(),
         ),
         IconButton(
           icon: Icon(Icons.keyboard_arrow_down, color: Colors.white),
-          onPressed: () => _textSearcher.goToNextMatch(),
+          onPressed: () => _textSearcher?.goToNextMatch(),
         ),
         IconButton(
           icon: Icon(Icons.close, color: Colors.white),
@@ -332,7 +319,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
             setState(() {
               _isSearching = false;
               _searchController.clear();
-              _textSearcher.resetTextSearch();
+              _textSearcher?.resetTextSearch();
             });
           },
         ),

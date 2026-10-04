@@ -9,6 +9,7 @@ import 'package:scan_master_app/services/file_manager_service.dart';
 import 'package:scan_master_app/widgets/file_thumbnail.dart';
 import 'package:scan_master_app/core/animations.dart';
 import 'package:scan_master_app/features/viewer/screens/viewer_screen.dart';
+import 'package:scan_master_app/features/viewer/screens/text_viewer_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:scan_master_app/widgets/file_filter_bar.dart';
 import 'package:scan_master_app/l10n/app_localizations.dart';
@@ -215,10 +216,17 @@ class _FolderViewScreenState extends State<FolderViewScreen> {
                       child: InkWell(
                         borderRadius: BorderRadius.circular(12),
                         onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => ViewerScreen(file: file)),
-                          );
+                          if (file.path.toLowerCase().endsWith('.txt')) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => TextViewerScreen(file: file)),
+                            );
+                          } else {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => ViewerScreen(file: file)),
+                            );
+                          }
                         },
                         child: Padding(
                           padding: const EdgeInsets.all(12),

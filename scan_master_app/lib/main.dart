@@ -56,10 +56,15 @@ Future<void> main() async {
 
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
+  // Initialize essential config and AdMob SDK BEFORE running the app
+  // This eliminates the 1.5-2s SDK init delay from the UI rendering phase,
+  // allowing Native Ads to start fetching immediately when the widget builds.
+  await AppConfig.initialize(); 
+  await AdService.initialize();
+
   // --- Global Industry-Level Error Handling (lightweight, no awaits) ---
   _setupErrorHandlers();
 
-  // Run app IMMEDIATELY — zero blocking, zero awaits
   runApp(const ScanMasterApp());
 }
 
@@ -82,7 +87,7 @@ void _setupErrorHandlers() {
               ),
               SizedBox(height: 12),
               Text(
-                kDebugMode ? details.exceptionAsString() : 'An unexpected error occurred. Please try restarting the app.',
+                details.exceptionAsString(), // Temporarily showing error in release mode for debugging
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.white70, fontSize: 14),
               ),
@@ -164,12 +169,8 @@ class _ScanMasterAppState extends State<ScanMasterApp> {
     _servicesInitialized = true;
     
     // These run AFTER the first frame, so user already sees the UI
-    await AppConfig.initialize(); // Load Firebase Remote Config values
-    await AdService.initialize();
     await NotificationService.initialize();
     await RemoteConfigService.initialize(); // Check for updates
-    
-
     
     // Request FCM permission
     await FirebaseMessaging.instance.requestPermission();
